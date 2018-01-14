@@ -1,4 +1,4 @@
-# Forked and edited to use `asyncio` and asynchronous web requests
+# Forked and edited to use asyncio
 
 This is a fork of the official [Python Azure Storage SDK](https://github.com/Azure/azure-storage-python), edited to work with `asyncio` and `aiohttp`, to support asynchronous non blocking web requests to REST APIs.
 
