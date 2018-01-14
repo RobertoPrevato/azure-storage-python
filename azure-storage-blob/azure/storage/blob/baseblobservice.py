@@ -94,10 +94,7 @@ from ._constants import (
     __version__ as package_version,
 )
 
-if sys.version_info >= (3,):
-    from io import BytesIO
-else:
-    from cStringIO import StringIO as BytesIO
+from io import BytesIO
 
 
 class BaseBlobService(StorageClient):
@@ -479,7 +476,7 @@ class BaseBlobService(StorageClient):
             content_type=content_type,
         )
 
-    def list_containers(self, prefix=None, num_results=None, include_metadata=False,
+    async def list_containers(self, prefix=None, num_results=None, include_metadata=False,
                         marker=None, timeout=None):
         '''
         Returns a generator to list the containers under the specified account.
@@ -513,11 +510,11 @@ class BaseBlobService(StorageClient):
         operation_context = _OperationContext(location_lock=True)
         kwargs = {'prefix': prefix, 'marker': marker, 'max_results': num_results,
                   'include': include, 'timeout': timeout, '_context': operation_context}
-        resp = self._list_containers(**kwargs)
+        resp = await self._list_containers(**kwargs)
 
         return ListGenerator(resp, self._list_containers, (), kwargs)
 
-    def _list_containers(self, prefix=None, marker=None, max_results=None,
+    async def _list_containers(self, prefix=None, marker=None, max_results=None,
                          include=None, timeout=None, _context=None):
         '''
         Returns a list of the containers under the specified account.
@@ -556,9 +553,9 @@ class BaseBlobService(StorageClient):
             'timeout': _int_to_str(timeout)
         }
 
-        return self._perform_request(request, _convert_xml_to_containers, operation_context=_context)
+        return await self._perform_request(request, _convert_xml_to_containers, operation_context=_context)
 
-    def create_container(self, container_name, metadata=None,
+    async def create_container(self, container_name, metadata=None,
                          public_access=None, fail_on_exist=False, timeout=None):
         '''
         Creates a new container under the specified account. If the container
@@ -596,16 +593,16 @@ class BaseBlobService(StorageClient):
 
         if not fail_on_exist:
             try:
-                self._perform_request(request)
+                await self._perform_request(request)
                 return True
             except AzureHttpError as ex:
                 _dont_fail_on_exist(ex)
                 return False
         else:
-            self._perform_request(request)
+            await self._perform_request(request)
             return True
 
-    def get_container_properties(self, container_name, lease_id=None, timeout=None):
+    async def get_container_properties(self, container_name, lease_id=None, timeout=None):
         '''
         Returns all user-defined metadata and system properties for the specified
         container. The data returned does not include the container's list of blobs.
@@ -631,9 +628,9 @@ class BaseBlobService(StorageClient):
         }
         request.headers = {'x-ms-lease-id': _to_str(lease_id)}
 
-        return self._perform_request(request, _parse_container, [container_name])
+        return await self._perform_request(request, _parse_container, [container_name])
 
-    def get_container_metadata(self, container_name, lease_id=None, timeout=None):
+    async def get_container_metadata(self, container_name, lease_id=None, timeout=None):
         '''
         Returns all user-defined metadata for the specified container.
 
@@ -660,10 +657,10 @@ class BaseBlobService(StorageClient):
         }
         request.headers = {'x-ms-lease-id': _to_str(lease_id)}
 
-        return self._perform_request(request, _parse_metadata)
+        return await self._perform_request(request, _parse_metadata)
 
-    def set_container_metadata(self, container_name, metadata=None,
-                               lease_id=None, if_modified_since=None, timeout=None):
+    async def set_container_metadata(self, container_name, metadata=None,
+                                     lease_id=None, if_modified_since=None, timeout=None):
         '''
         Sets one or more user-defined name-value pairs for the specified
         container. Each call to this operation replaces all existing metadata
@@ -706,9 +703,9 @@ class BaseBlobService(StorageClient):
         }
         _add_metadata_headers(metadata, request)
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)
 
-    def get_container_acl(self, container_name, lease_id=None, timeout=None):
+    async def get_container_acl(self, container_name, lease_id=None, timeout=None):
         '''
         Gets the permissions for the specified container.
         The permissions indicate whether container data may be accessed publicly.
@@ -736,9 +733,9 @@ class BaseBlobService(StorageClient):
         }
         request.headers = {'x-ms-lease-id': _to_str(lease_id)}
 
-        return self._perform_request(request, _convert_xml_to_signed_identifiers_and_access)
+        return await self._perform_request(request, _convert_xml_to_signed_identifiers_and_access)
 
-    def set_container_acl(self, container_name, signed_identifiers=None,
+    async def set_container_acl(self, container_name, signed_identifiers=None,
                           public_access=None, lease_id=None,
                           if_modified_since=None, if_unmodified_since=None, timeout=None):
         '''
@@ -795,9 +792,9 @@ class BaseBlobService(StorageClient):
         request.body = _get_request_body(
             _convert_signed_identifiers_to_xml(signed_identifiers))
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)
 
-    def delete_container(self, container_name, fail_not_exist=False,
+    async def delete_container(self, container_name, fail_not_exist=False,
                          lease_id=None, if_modified_since=None,
                          if_unmodified_since=None, timeout=None):
         '''
@@ -847,16 +844,16 @@ class BaseBlobService(StorageClient):
 
         if not fail_not_exist:
             try:
-                self._perform_request(request)
+                await self._perform_request(request)
                 return True
             except AzureHttpError as ex:
                 _dont_fail_not_exist(ex)
                 return False
         else:
-            self._perform_request(request)
+            await self._perform_request(request)
             return True
 
-    def _lease_container_impl(
+    async def _lease_container_impl(
             self, container_name, lease_action, lease_id, lease_duration,
             lease_break_period, proposed_lease_id, if_modified_since,
             if_unmodified_since, timeout):
@@ -936,9 +933,9 @@ class BaseBlobService(StorageClient):
             'If-Unmodified-Since': _datetime_to_utc_string(if_unmodified_since),
         }
 
-        return self._perform_request(request, _parse_lease)
+        return await self._perform_request(request, _parse_lease)
 
-    def acquire_container_lease(
+    async def acquire_container_lease(
             self, container_name, lease_duration=-1, proposed_lease_id=None,
             if_modified_since=None, if_unmodified_since=None, timeout=None):
         '''
@@ -978,18 +975,18 @@ class BaseBlobService(StorageClient):
                 (lease_duration < 15 or lease_duration > 60):
             raise ValueError(_ERROR_INVALID_LEASE_DURATION)
 
-        lease = self._lease_container_impl(container_name,
-                                           _LeaseActions.Acquire,
-                                           None,  # lease_id
-                                           lease_duration,
-                                           None,  # lease_break_period
-                                           proposed_lease_id,
-                                           if_modified_since,
-                                           if_unmodified_since,
-                                           timeout)
+        lease = await self._lease_container_impl(container_name,
+                                                _LeaseActions.Acquire,
+                                                None,  # lease_id
+                                                lease_duration,
+                                                None,  # lease_break_period
+                                                proposed_lease_id,
+                                                if_modified_since,
+                                                if_unmodified_since,
+                                                timeout)
         return lease['id']
 
-    def renew_container_lease(
+    async def renew_container_lease(
             self, container_name, lease_id, if_modified_since=None,
             if_unmodified_since=None, timeout=None):
         '''
@@ -1022,18 +1019,18 @@ class BaseBlobService(StorageClient):
         '''
         _validate_not_none('lease_id', lease_id)
 
-        lease = self._lease_container_impl(container_name,
-                                           _LeaseActions.Renew,
-                                           lease_id,
-                                           None,  # lease_duration
-                                           None,  # lease_break_period
-                                           None,  # proposed_lease_id
-                                           if_modified_since,
-                                           if_unmodified_since,
-                                           timeout)
+        lease = await self._lease_container_impl(container_name,
+                                                 _LeaseActions.Renew,
+                                                 lease_id,
+                                                 None,  # lease_duration
+                                                 None,  # lease_break_period
+                                                 None,  # proposed_lease_id
+                                                 if_modified_since,
+                                                 if_unmodified_since,
+                                                 timeout)
         return lease['id']
 
-    def release_container_lease(
+    async def release_container_lease(
             self, container_name, lease_id, if_modified_since=None,
             if_unmodified_since=None, timeout=None):
         '''
@@ -1062,17 +1059,17 @@ class BaseBlobService(StorageClient):
         '''
         _validate_not_none('lease_id', lease_id)
 
-        self._lease_container_impl(container_name,
-                                   _LeaseActions.Release,
-                                   lease_id,
-                                   None,  # lease_duration
-                                   None,  # lease_break_period
-                                   None,  # proposed_lease_id
-                                   if_modified_since,
-                                   if_unmodified_since,
-                                   timeout)
+        await self._lease_container_impl(container_name,
+                                         _LeaseActions.Release,
+                                         lease_id,
+                                         None,  # lease_duration
+                                         None,  # lease_break_period
+                                         None,  # proposed_lease_id
+                                         if_modified_since,
+                                         if_unmodified_since,
+                                         timeout)
 
-    def break_container_lease(
+    async def break_container_lease(
             self, container_name, lease_break_period=None,
             if_modified_since=None, if_unmodified_since=None, timeout=None):
         '''
@@ -1116,18 +1113,18 @@ class BaseBlobService(StorageClient):
         if (lease_break_period is not None) and (lease_break_period < 0 or lease_break_period > 60):
             raise ValueError(_ERROR_INVALID_LEASE_BREAK_PERIOD)
 
-        lease = self._lease_container_impl(container_name,
-                                           _LeaseActions.Break,
-                                           None,  # lease_id
-                                           None,  # lease_duration
-                                           lease_break_period,
-                                           None,  # proposed_lease_id
-                                           if_modified_since,
-                                           if_unmodified_since,
-                                           timeout)
+        lease = await self._lease_container_impl(container_name,
+                                                 _LeaseActions.Break,
+                                                 None,  # lease_id
+                                                 None,  # lease_duration
+                                                 lease_break_period,
+                                                 None,  # proposed_lease_id
+                                                 if_modified_since,
+                                                 if_unmodified_since,
+                                                 timeout)
         return lease['time']
 
-    def change_container_lease(
+    async def change_container_lease(
             self, container_name, lease_id, proposed_lease_id,
             if_modified_since=None, if_unmodified_since=None, timeout=None):
         '''
@@ -1158,7 +1155,7 @@ class BaseBlobService(StorageClient):
         '''
         _validate_not_none('lease_id', lease_id)
 
-        self._lease_container_impl(container_name,
+        await self._lease_container_impl(container_name,
                                    _LeaseActions.Change,
                                    lease_id,
                                    None,  # lease_duration
@@ -1168,8 +1165,8 @@ class BaseBlobService(StorageClient):
                                    if_unmodified_since,
                                    timeout)
 
-    def list_blobs(self, container_name, prefix=None, num_results=None, include=None,
-                   delimiter=None, marker=None, timeout=None):
+    async def list_blobs(self, container_name, prefix=None, num_results=None, include=None,
+                         delimiter=None, marker=None, timeout=None):
         '''
         Returns a generator to list the blobs under the specified container.
         The generator will lazily follow the continuation tokens returned by
@@ -1213,13 +1210,13 @@ class BaseBlobService(StorageClient):
         kwargs = {'prefix': prefix, 'marker': marker, 'max_results': num_results,
                   'include': include, 'delimiter': delimiter, 'timeout': timeout,
                   '_context': operation_context}
-        resp = self._list_blobs(*args, **kwargs)
+        resp = await self._list_blobs(*args, **kwargs)
 
         return ListGenerator(resp, self._list_blobs, args, kwargs)
 
-    def _list_blobs(self, container_name, prefix=None, marker=None,
-                    max_results=None, include=None, delimiter=None, timeout=None,
-                    _context=None):
+    async def _list_blobs(self, container_name, prefix=None, marker=None,
+                          max_results=None, include=None, delimiter=None, timeout=None,
+                          _context=None):
         '''
         Returns the list of blobs under the specified container.
 
@@ -1284,9 +1281,9 @@ class BaseBlobService(StorageClient):
             'timeout': _int_to_str(timeout),
         }
 
-        return self._perform_request(request, _convert_xml_to_blob_list, operation_context=_context)
+        return await self._perform_request(request, _convert_xml_to_blob_list, operation_context=_context)
 
-    def get_blob_service_stats(self, timeout=None):
+    async def get_blob_service_stats(self, timeout=None):
         '''
         Retrieves statistics related to replication for the Blob service. It is 
         only available when read-access geo-redundant replication is enabled for 
@@ -1320,9 +1317,9 @@ class BaseBlobService(StorageClient):
             'timeout': _int_to_str(timeout),
         }
 
-        return self._perform_request(request, _convert_xml_to_service_stats)
+        return await self._perform_request(request, _convert_xml_to_service_stats)
 
-    def set_blob_service_properties(
+    async def set_blob_service_properties(
             self, logging=None, hour_metrics=None, minute_metrics=None,
             cors=None, target_version=None, timeout=None):
         '''
@@ -1361,9 +1358,9 @@ class BaseBlobService(StorageClient):
         request.body = _get_request_body(
             _convert_service_properties_to_xml(logging, hour_metrics, minute_metrics, cors, target_version))
 
-        self._perform_request(request)
+        await self._perform_request(request)
 
-    def get_blob_service_properties(self, timeout=None):
+    async def get_blob_service_properties(self, timeout=None):
         '''
         Gets the properties of a storage account's Blob service, including
         Azure Storage Analytics.
@@ -1385,9 +1382,9 @@ class BaseBlobService(StorageClient):
             'timeout': _int_to_str(timeout),
         }
 
-        return self._perform_request(request, _convert_xml_to_service_properties)
+        return await self._perform_request(request, _convert_xml_to_service_properties)
 
-    def get_blob_properties(
+    async def get_blob_properties(
             self, container_name, blob_name, snapshot=None, lease_id=None,
             if_modified_since=None, if_unmodified_since=None, if_match=None,
             if_none_match=None, timeout=None):
@@ -1450,9 +1447,9 @@ class BaseBlobService(StorageClient):
             'If-None-Match': _to_str(if_none_match),
         }
 
-        return self._perform_request(request, _parse_blob, [blob_name, snapshot])
+        return await self._perform_request(request, _parse_blob, [blob_name, snapshot])
 
-    def set_blob_properties(
+    async def set_blob_properties(
             self, container_name, blob_name, content_settings=None, lease_id=None,
             if_modified_since=None, if_unmodified_since=None, if_match=None,
             if_none_match=None, timeout=None):
@@ -1514,9 +1511,9 @@ class BaseBlobService(StorageClient):
         if content_settings is not None:
             request.headers.update(content_settings._to_headers())
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)
 
-    def exists(self, container_name, blob_name=None, snapshot=None, timeout=None):
+    async def exists(self, container_name, blob_name=None, snapshot=None, timeout=None):
         '''
         Returns a boolean indicating whether the container exists (if blob_name 
         is None), or otherwise a boolean indicating whether the blob exists.
@@ -1536,15 +1533,15 @@ class BaseBlobService(StorageClient):
         _validate_not_none('container_name', container_name)
         try:
             if blob_name is None:
-                self.get_container_properties(container_name, timeout=timeout)
+                await self.get_container_properties(container_name, timeout=timeout)
             else:
-                self.get_blob_properties(container_name, blob_name, snapshot=snapshot, timeout=timeout)
+                await self.get_blob_properties(container_name, blob_name, snapshot=snapshot, timeout=timeout)
             return True
         except AzureHttpError as ex:
             _dont_fail_not_exist(ex)
             return False
 
-    def _get_blob(
+    async def _get_blob(
             self, container_name, blob_name, snapshot=None, start_range=None,
             end_range=None, validate_content=False, lease_id=None, if_modified_since=None,
             if_unmodified_since=None, if_match=None, if_none_match=None, timeout=None,
@@ -1655,13 +1652,13 @@ class BaseBlobService(StorageClient):
             end_range_required=False,
             check_content_md5=validate_content)
 
-        return self._perform_request(request, _parse_blob,
+        return await self._perform_request(request, _parse_blob,
                                      [blob_name, snapshot, validate_content, self.require_encryption,
                                       self.key_encryption_key, self.key_resolver_function,
                                       start_offset, end_offset],
                                      operation_context=_context)
 
-    def get_blob_to_path(
+    async def get_blob_to_path(
             self, container_name, blob_name, file_path, open_mode='wb',
             snapshot=None, start_range=None, end_range=None,
             validate_content=False, progress_callback=None,
@@ -1766,7 +1763,7 @@ class BaseBlobService(StorageClient):
             raise ValueError(_ERROR_PARALLEL_NOT_SEEKABLE)
 
         with open(file_path, open_mode) as stream:
-            blob = self.get_blob_to_stream(
+            blob = await self.get_blob_to_stream(
                 container_name,
                 blob_name,
                 stream,
@@ -1785,7 +1782,7 @@ class BaseBlobService(StorageClient):
 
         return blob
 
-    def get_blob_to_stream(
+    async def get_blob_to_stream(
             self, container_name, blob_name, stream, snapshot=None,
             start_range=None, end_range=None, validate_content=False,
             progress_callback=None, max_connections=2, lease_id=None,
@@ -2250,7 +2247,7 @@ class BaseBlobService(StorageClient):
         blob.content = blob.content.decode(encoding)
         return blob
 
-    def get_blob_metadata(
+    async def get_blob_metadata(
             self, container_name, blob_name, snapshot=None, lease_id=None,
             if_modified_since=None, if_unmodified_since=None, if_match=None,
             if_none_match=None, timeout=None):
@@ -2312,9 +2309,9 @@ class BaseBlobService(StorageClient):
             'If-None-Match': _to_str(if_none_match),
         }
 
-        return self._perform_request(request, _parse_metadata)
+        return await self._perform_request(request, _parse_metadata)
 
-    def set_blob_metadata(self, container_name, blob_name,
+    async def set_blob_metadata(self, container_name, blob_name,
                           metadata=None, lease_id=None,
                           if_modified_since=None, if_unmodified_since=None,
                           if_match=None, if_none_match=None, timeout=None):
@@ -2378,9 +2375,9 @@ class BaseBlobService(StorageClient):
         }
         _add_metadata_headers(metadata, request)
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)
 
-    def _lease_blob_impl(self, container_name, blob_name,
+    async def _lease_blob_impl(self, container_name, blob_name,
                          lease_action, lease_id,
                          lease_duration, lease_break_period,
                          proposed_lease_id, if_modified_since,
@@ -2473,9 +2470,9 @@ class BaseBlobService(StorageClient):
             'If-None-Match': _to_str(if_none_match),
         }
 
-        return self._perform_request(request, _parse_lease)
+        return await self._perform_request(request, _parse_lease)
 
-    def acquire_blob_lease(self, container_name, blob_name,
+    async def acquire_blob_lease(self, container_name, blob_name,
                            lease_duration=-1,
                            proposed_lease_id=None,
                            if_modified_since=None,
@@ -2530,7 +2527,7 @@ class BaseBlobService(StorageClient):
         if lease_duration is not -1 and \
                 (lease_duration < 15 or lease_duration > 60):
             raise ValueError(_ERROR_INVALID_LEASE_DURATION)
-        lease = self._lease_blob_impl(container_name,
+        lease = await self._lease_blob_impl(container_name,
                                       blob_name,
                                       _LeaseActions.Acquire,
                                       None,  # lease_id
@@ -2544,7 +2541,7 @@ class BaseBlobService(StorageClient):
                                       timeout)
         return lease['id']
 
-    def renew_blob_lease(self, container_name, blob_name,
+    async def renew_blob_lease(self, container_name, blob_name,
                          lease_id, if_modified_since=None,
                          if_unmodified_since=None, if_match=None,
                          if_none_match=None, timeout=None):
@@ -2589,7 +2586,7 @@ class BaseBlobService(StorageClient):
         '''
         _validate_not_none('lease_id', lease_id)
 
-        lease = self._lease_blob_impl(container_name,
+        lease = await self._lease_blob_impl(container_name,
                                       blob_name,
                                       _LeaseActions.Renew,
                                       lease_id,
@@ -2603,7 +2600,7 @@ class BaseBlobService(StorageClient):
                                       timeout)
         return lease['id']
 
-    def release_blob_lease(self, container_name, blob_name,
+    async def release_blob_lease(self, container_name, blob_name,
                            lease_id, if_modified_since=None,
                            if_unmodified_since=None, if_match=None,
                            if_none_match=None, timeout=None):
@@ -2644,7 +2641,7 @@ class BaseBlobService(StorageClient):
         '''
         _validate_not_none('lease_id', lease_id)
 
-        self._lease_blob_impl(container_name,
+        await self._lease_blob_impl(container_name,
                               blob_name,
                               _LeaseActions.Release,
                               lease_id,
@@ -2657,7 +2654,7 @@ class BaseBlobService(StorageClient):
                               if_none_match,
                               timeout)
 
-    def break_blob_lease(self, container_name, blob_name,
+    async def break_blob_lease(self, container_name, blob_name,
                          lease_break_period=None,
                          if_modified_since=None,
                          if_unmodified_since=None,
@@ -2717,7 +2714,7 @@ class BaseBlobService(StorageClient):
         if (lease_break_period is not None) and (lease_break_period < 0 or lease_break_period > 60):
             raise ValueError(_ERROR_INVALID_LEASE_BREAK_PERIOD)
 
-        lease = self._lease_blob_impl(container_name,
+        lease = await self._lease_blob_impl(container_name,
                                       blob_name,
                                       _LeaseActions.Break,
                                       None,  # lease_id
@@ -2731,7 +2728,7 @@ class BaseBlobService(StorageClient):
                                       timeout)
         return lease['time']
 
-    def change_blob_lease(self, container_name, blob_name,
+    async def change_blob_lease(self, container_name, blob_name,
                           lease_id,
                           proposed_lease_id,
                           if_modified_since=None,
@@ -2775,7 +2772,7 @@ class BaseBlobService(StorageClient):
         :param int timeout:
             The timeout parameter is expressed in seconds.
         '''
-        self._lease_blob_impl(container_name,
+        await self._lease_blob_impl(container_name,
                               blob_name,
                               _LeaseActions.Change,
                               lease_id,
@@ -2788,7 +2785,7 @@ class BaseBlobService(StorageClient):
                               if_none_match,
                               timeout)
 
-    def snapshot_blob(self, container_name, blob_name,
+    async def snapshot_blob(self, container_name, blob_name,
                       metadata=None, if_modified_since=None,
                       if_unmodified_since=None, if_match=None,
                       if_none_match=None, lease_id=None, timeout=None):
@@ -2853,9 +2850,9 @@ class BaseBlobService(StorageClient):
         }
         _add_metadata_headers(metadata, request)
 
-        return self._perform_request(request, _parse_snapshot_blob, [blob_name])
+        return await self._perform_request(request, _parse_snapshot_blob, [blob_name])
 
-    def copy_blob(self, container_name, blob_name, copy_source,
+    async def copy_blob(self, container_name, blob_name, copy_source,
                   metadata=None,
                   source_if_modified_since=None,
                   source_if_unmodified_since=None,
@@ -2982,7 +2979,7 @@ class BaseBlobService(StorageClient):
         :return: Copy operation properties such as status, source, and ID.
         :rtype: :class:`~azure.storage.blob.models.CopyProperties`
         '''
-        return self._copy_blob(container_name, blob_name, copy_source,
+        return await self._copy_blob(container_name, blob_name, copy_source,
                                metadata,
                                None,
                                source_if_modified_since, source_if_unmodified_since,
@@ -2995,7 +2992,7 @@ class BaseBlobService(StorageClient):
                                source_lease_id, timeout,
                                False)
 
-    def _copy_blob(self, container_name, blob_name, copy_source,
+    async def _copy_blob(self, container_name, blob_name, copy_source,
                    metadata=None,
                    premium_page_blob_tier=None,
                    source_if_modified_since=None,
@@ -3063,9 +3060,9 @@ class BaseBlobService(StorageClient):
         }
         _add_metadata_headers(metadata, request)
 
-        return self._perform_request(request, _parse_properties, [BlobProperties]).copy
+        return await self._perform_request(request, _parse_properties, [BlobProperties]).copy
 
-    def abort_copy_blob(self, container_name, blob_name, copy_id,
+    async def abort_copy_blob(self, container_name, blob_name, copy_id,
                         lease_id=None, timeout=None):
         '''
          Aborts a pending copy_blob operation, and leaves a destination blob
@@ -3100,9 +3097,9 @@ class BaseBlobService(StorageClient):
             'x-ms-copy-action': 'abort',
         }
 
-        self._perform_request(request)
+        await self._perform_request(request)
 
-    def delete_blob(self, container_name, blob_name, snapshot=None,
+    async def delete_blob(self, container_name, blob_name, snapshot=None,
                     lease_id=None, delete_snapshots=None,
                     if_modified_since=None, if_unmodified_since=None,
                     if_match=None, if_none_match=None, timeout=None):
@@ -3168,4 +3165,4 @@ class BaseBlobService(StorageClient):
             'timeout': _int_to_str(timeout)
         }
 
-        self._perform_request(request)
+        await self._perform_request(request)

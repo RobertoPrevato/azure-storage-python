@@ -412,7 +412,7 @@ class BlockBlobService(BaseBlobService):
                 if_none_match=if_none_match,
                 timeout=timeout)
 
-    def create_blob_from_stream(
+    async def create_blob_from_stream(
             self, container_name, blob_name, stream, count=None,
             content_settings=None, metadata=None, validate_content=False,
             progress_callback=None, max_connections=2, lease_id=None,
@@ -517,7 +517,7 @@ class BlockBlobService(BaseBlobService):
                 progress_callback(0, count)
 
             data = stream.read(count)
-            resp = self._put_blob(
+            resp = await self._put_blob(
                 container_name=container_name,
                 blob_name=blob_name,
                 blob=data,
@@ -595,7 +595,7 @@ class BlockBlobService(BaseBlobService):
                 encryption_data=encryption_data
             )
 
-    def create_blob_from_bytes(
+    async def create_blob_from_bytes(
             self, container_name, blob_name, blob, index=0, count=None,
             content_settings=None, metadata=None, validate_content=False,
             progress_callback=None, max_connections=2, lease_id=None,
@@ -682,7 +682,7 @@ class BlockBlobService(BaseBlobService):
         stream = BytesIO(blob)
         stream.seek(index)
 
-        return self.create_blob_from_stream(
+        return await self.create_blob_from_stream(
             container_name=container_name,
             blob_name=blob_name,
             stream=stream,
@@ -701,7 +701,7 @@ class BlockBlobService(BaseBlobService):
             use_byte_buffer=True
         )
 
-    def create_blob_from_text(
+    async def create_blob_from_text(
             self, container_name, blob_name, text, encoding='utf-8',
             content_settings=None, metadata=None, validate_content=False,
             progress_callback=None, max_connections=2, lease_id=None,
@@ -777,7 +777,7 @@ class BlockBlobService(BaseBlobService):
             _validate_not_none('encoding', encoding)
             text = text.encode(encoding)
 
-        return self.create_blob_from_bytes(
+        return await self.create_blob_from_bytes(
             container_name=container_name,
             blob_name=blob_name,
             blob=text,
@@ -795,7 +795,7 @@ class BlockBlobService(BaseBlobService):
             if_none_match=if_none_match,
             timeout=timeout)
 
-    def set_standard_blob_tier(
+    async def set_standard_blob_tier(
         self, container_name, blob_name, standard_blob_tier, timeout=None):
         '''
         Sets the block blob tiers on the blob. This API is only supported for block blobs on standard storage accounts.
@@ -828,10 +828,10 @@ class BlockBlobService(BaseBlobService):
             'x-ms-access-tier': _to_str(standard_blob_tier)
         }
 
-        self._perform_request(request)
+        await self._perform_request(request)
 
     # -----Helper methods------------------------------------
-    def _put_blob(self, container_name, blob_name, blob, content_settings=None,
+    async def _put_blob(self, container_name, blob_name, blob, content_settings=None,
                   metadata=None, validate_content=False, lease_id=None, if_modified_since=None,
                   if_unmodified_since=None, if_match=None, if_none_match=None,
                   timeout=None):
@@ -918,9 +918,9 @@ class BlockBlobService(BaseBlobService):
             computed_md5 = _get_content_md5(request.body)
             request.headers['Content-MD5'] = _to_str(computed_md5)
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)
 
-    def _put_block(self, container_name, blob_name, block, block_id,
+    async def _put_block(self, container_name, blob_name, block, block_id,
                    validate_content=False, lease_id=None, timeout=None):
         '''
         See put_block for more details. This helper method
@@ -960,9 +960,9 @@ class BlockBlobService(BaseBlobService):
             computed_md5 = _get_content_md5(request.body)
             request.headers['Content-MD5'] = _to_str(computed_md5)
 
-        self._perform_request(request)
+        await self._perform_request(request)
 
-    def _put_block_list(
+    async def _put_block_list(
             self, container_name, blob_name, block_list, content_settings=None,
             metadata=None, validate_content=False, lease_id=None, if_modified_since=None,
             if_unmodified_since=None, if_match=None, if_none_match=None,
@@ -999,8 +999,7 @@ class BlockBlobService(BaseBlobService):
         _add_metadata_headers(metadata, request)
         if content_settings is not None:
             request.headers.update(content_settings._to_headers())
-        request.body = _get_request_body(
-            _convert_block_list_to_xml(block_list))
+        request.body = _get_request_body(_convert_block_list_to_xml(block_list))
 
         if validate_content:
             computed_md5 = _get_content_md5(request.body)
@@ -1009,4 +1008,4 @@ class BlockBlobService(BaseBlobService):
         if encryption_data is not None:
             request.headers['x-ms-meta-encryptiondata'] = encryption_data
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)

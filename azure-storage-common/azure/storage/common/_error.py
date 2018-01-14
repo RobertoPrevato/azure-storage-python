@@ -113,8 +113,12 @@ def _dont_fail_not_exist(error):
 def _http_error_handler(http_error):
     ''' Simple error handler for azure.'''
     message = str(http_error)
-    if http_error.respbody is not None:
-        message += '\n' + http_error.respbody.decode('utf-8-sig')
+    respbody = http_error.respbody
+    if respbody is not None:
+        if hasattr(http_error, "decode"):
+            message += '\n' + respbody.decode('utf-8-sig')
+        else:
+            message += '\n' + respbody
     raise AzureHttpError(message, http_error.status)
 
 

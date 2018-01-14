@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --------------------------------------------------------------------------
-
+import urllib
 import logging
 from . import HTTPResponse
 from .._serialization import _get_data_bytes_or_stream_only
@@ -40,11 +40,11 @@ class _HTTPClient(object):
         # By default, requests adds an Accept:*/* and Accept-Encoding to the session, 
         # which causes issues with some Azure REST APIs. Removing these here gives us 
         # the flexibility to add it back on a case by case basis.
-        if 'Accept' in self.session.headers:
-            del self.session.headers['Accept']
+        # if 'Accept' in self.session.headers:
+        #    del self.session.headers['Accept']
 
-        if 'Accept-Encoding' in self.session.headers:
-            del self.session.headers['Accept-Encoding']
+        # if 'Accept-Encoding' in self.session.headers:
+        #    del self.session.headers['Accept-Encoding']
 
         self.proxies = None
 
@@ -74,7 +74,7 @@ class _HTTPClient(object):
         self.proxies = {'http': 'http://{}'.format(proxy_string),
                         'https': 'https://{}'.format(proxy_string)}
 
-    def perform_request(self, request):
+    async def perform_request(self, request):
         '''
         Sends an HTTPRequest to Azure Storage and returns an HTTPResponse. If 
         the response code indicates an error, raise an HTTPError.    
@@ -92,21 +92,32 @@ class _HTTPClient(object):
         uri = self.protocol.lower() + '://' + request.host + request.path
 
         # Send the request
-        response = self.session.request(request.method,
-                                        uri,
-                                        params=request.query,
-                                        headers=request.headers,
-                                        data=request.body or None,
-                                        timeout=self.timeout,
-                                        proxies=self.proxies)
+        method = request.method
+        try:
+            # in aiohttp, the query string must be an actual string (due to changes in one of its dependencies)
+            query_string = urllib.parse.urlencode(request.query)
+
+            response = await self.session.request(request.method,
+                                              uri,
+                                              params=query_string, # request.query,
+                                              headers=request.headers,
+                                              data=request.body, # or None ?
+                                              timeout=self.timeout,
+                                             ) # proxies=self.proxies -- apparently aiohttp can have one proxy, not many (https://docs.aiohttp.org/en/stable/client_reference.html)
+        except Exception as ex:
+            print(ex)
+            raise
 
         # Parse the response
-        status = int(response.status_code)
+        status = response.status
         response_headers = {}
         for key, name in response.headers.items():
             response_headers[key.lower()] = name
 
-        wrap = HTTPResponse(status, response.reason, response_headers, response.content)
+        # TODO: lazily read the response content when necessary
+        content = await response.text()
+
+        wrap = HTTPResponse(status, response.reason, response_headers, content)
         response.close()
 
         return wrap

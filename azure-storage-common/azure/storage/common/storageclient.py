@@ -20,7 +20,10 @@ import logging
 logger = logging.getLogger(__name__)
 from time import sleep
 
+import asyncio
+import aiohttp
 import requests
+
 from azure.common import (
     AzureException,
 )
@@ -48,6 +51,15 @@ from .models import (
     _OperationContext,
 )
 from .retry import ExponentialRetry
+
+
+def get_aiohttp_session():
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return aiohttp.ClientSession(loop=loop)
 
 
 class StorageClient(object):
@@ -119,13 +131,18 @@ class StorageClient(object):
         self.secondary_endpoint = connection_params.secondary_endpoint
 
         protocol = connection_params.protocol
-        request_session = connection_params.request_session or requests.Session()
+
+        # TODO: eventually define an interface for "SessionProvider", to support alternative implementations
+        request_session = connection_params.request_session or get_aiohttp_session()
         socket_timeout = connection_params.socket_timeout or DEFAULT_SOCKET_TIMEOUT
         self._httpclient = _HTTPClient(
             protocol=protocol,
             session=request_session,
             timeout=socket_timeout,
         )
+
+        # why the _httpclient should be private? We need to dispose it!!!
+        self.httpclient = self._httpclient
 
         self.retry = ExponentialRetry().retry
         self.location_mode = LocationMode.PRIMARY
@@ -216,7 +233,7 @@ class StorageClient(object):
         else:
             return ""
 
-    def _perform_request(self, request, parser=None, parser_args=None, operation_context=None):
+    async def _perform_request(self, request, parser=None, parser_args=None, operation_context=None):
         '''
         Sends the request and return response. Catches HTTPError and hands it
         to error handler
@@ -243,6 +260,19 @@ class StorageClient(object):
                     # callback. This also ensures retry policies with long back offs 
                     # will work as it resets the time sensitive headers.
                     _add_date_header(request)
+
+                    # remove headers with none value
+                    request.headers = {k: (v or "") for k, v in request.headers.items()}
+                    request.query = {k: v for k, v in request.query.items() if v is not None}
+
+                    # NB: aiohttp adds extra headers that would break the authentication token
+                    request.headers.update({
+                        'Accept': '*/*',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Host': f'{self.account_name}.blob.core.windows.net',
+                        'Content-Type': 'application/octet-stream'
+                    })
+
                     self.authentication.sign_request(request)
 
                     # Set the request context
@@ -256,8 +286,8 @@ class StorageClient(object):
                                 request.query,
                                 str(request.headers).replace('\n', ''))
 
-                    # Perform the request
-                    response = self._httpclient.perform_request(request)
+                    # Do the request
+                    response = await self._httpclient.perform_request(request)
 
                     # Execute the response callback
                     if self.response_callback:
@@ -295,7 +325,7 @@ class StorageClient(object):
                 except AzureException as ex:
                     retry_context.exception = ex
                     raise ex
-                except Exception as ex:
+                except FooException as ex:
                     retry_context.exception = ex
                     if sys.version_info >= (3,):
                         # Automatic chaining in Python 3 means we keep the trace
@@ -339,6 +369,7 @@ class StorageClient(object):
                 # Determine whether a retry should be performed and if so, how 
                 # long to wait before performing retry.
                 retry_interval = self.retry(retry_context)
+
                 if retry_interval is not None:
                     # Execute the callback
                     if self.retry_callback:
