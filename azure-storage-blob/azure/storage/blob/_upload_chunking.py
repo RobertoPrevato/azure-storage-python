@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --------------------------------------------------------------------------
+import asyncio
 from io import (BytesIO, IOBase, SEEK_CUR, SEEK_END, SEEK_SET, UnsupportedOperation)
 from math import ceil
 from threading import Lock
@@ -32,7 +33,7 @@ from ._constants import (
 )
 
 
-def _upload_blob_chunks(blob_service, container_name, blob_name,
+async def _upload_blob_chunks(blob_service, container_name, blob_name,
                         blob_size, block_size, stream, max_connections,
                         progress_callback, validate_content, lease_id, uploader_class,
                         maxsize_condition=None, if_match=None, timeout=None,
@@ -98,9 +99,15 @@ def _upload_blob_chunks(blob_service, container_name, blob_name,
             running_futures.append(future)
 
         # result() will wait until completion and also raise any exceptions that may have been set.
-        range_ids = [f.result() for f in futures]
+        range_ids = [await f.result() for f in futures]
     else:
-        range_ids = [uploader.process_chunk(result) for result in uploader.get_chunk_streams()]
+        # NB: here we need to await for each chunk, otherwise all necessary requests to upload start together and
+        # the code is currently going to coroutine TimeOut;
+        # I am not sure whether waiting for previous request to complete is a desirable behavior, but it makes sense to
+        # not monopolize the bandwidth for a single big file to upload;
+        range_ids = [await uploader.process_chunk(result) for result in uploader.get_chunk_streams()]
+
+    # done, futures = await asyncio.wait(range_ids)
 
     if resource_properties:
         resource_properties.last_modified = uploader.last_modified
@@ -207,10 +214,12 @@ class _BlobChunkUploader(object):
                 break
             index += len(data)
 
-    def process_chunk(self, chunk_data):
-        chunk_bytes = chunk_data[1].read()
+    async def process_chunk(self, chunk_data):
+        # TODO: get the length of io.BytesIO from previous code; aiohttp recommends against using raw bytes array!
+        # TODO: following .read() is only called to get the length of the raw bytes array
+        #chunk_bytes = chunk_data[1].read()
         chunk_offset = chunk_data[0]
-        return self._upload_chunk_with_progress(chunk_offset, chunk_bytes)
+        return await self._upload_chunk_with_progress(chunk_offset, chunk_data[1])#chunk_bytes)
 
     def _update_progress(self, length):
         if self.progress_callback is not None:
@@ -223,9 +232,10 @@ class _BlobChunkUploader(object):
                 total = self.progress_total
             self.progress_callback(total, self.blob_size)
 
-    def _upload_chunk_with_progress(self, chunk_offset, chunk_data):
-        range_id = self._upload_chunk(chunk_offset, chunk_data)
-        self._update_progress(len(chunk_data))
+    async def _upload_chunk_with_progress(self, chunk_offset, chunk_data):
+        range_id = await self._upload_chunk(chunk_offset, chunk_data)
+        # TODO: get the length of io.BytesIO from previous code; aiohttp recommends against using raw bytes array!
+        # self._update_progress(len(chunk_data))
         return range_id
 
     def get_substream_blocks(self):
@@ -260,9 +270,9 @@ class _BlobChunkUploader(object):
 
 
 class _BlockBlobChunkUploader(_BlobChunkUploader):
-    def _upload_chunk(self, chunk_offset, chunk_data):
+    async def _upload_chunk(self, chunk_offset, chunk_data):
         block_id = url_quote(_encode_base64('{0:032d}'.format(chunk_offset)))
-        self.blob_service._put_block(
+        await self.blob_service._put_block(
             self.container_name,
             self.blob_name,
             chunk_data,

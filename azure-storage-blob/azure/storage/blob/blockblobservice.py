@@ -322,7 +322,7 @@ class BlockBlobService(BaseBlobService):
 
     # ----Convenience APIs-----------------------------------------------------
 
-    def create_blob_from_path(
+    async def create_blob_from_path(
             self, container_name, blob_name, file_path, content_settings=None,
             metadata=None, validate_content=False, progress_callback=None,
             max_connections=2, lease_id=None, if_modified_since=None,
@@ -395,7 +395,7 @@ class BlockBlobService(BaseBlobService):
 
         count = path.getsize(file_path)
         with open(file_path, 'rb') as stream:
-            return self.create_blob_from_stream(
+            return await self.create_blob_from_stream(
                 container_name=container_name,
                 blob_name=blob_name,
                 stream=stream,
@@ -547,7 +547,7 @@ class BlockBlobService(BaseBlobService):
                 if self.key_encryption_key:
                     cek, iv, encryption_data = _generate_blob_encryption_data(self.key_encryption_key)
 
-                block_ids = _upload_blob_chunks(
+                block_ids = await _upload_blob_chunks(
                     blob_service=self,
                     container_name=container_name,
                     blob_name=blob_name,
@@ -564,7 +564,7 @@ class BlockBlobService(BaseBlobService):
                     initialization_vector=iv
                 )
             else:
-                block_ids = _upload_blob_substream_blocks(
+                block_ids = await _upload_blob_substream_blocks(
                     blob_service=self,
                     container_name=container_name,
                     blob_name=blob_name,
@@ -579,7 +579,7 @@ class BlockBlobService(BaseBlobService):
                     timeout=timeout,
                 )
 
-            return self._put_block_list(
+            return await self._put_block_list(
                 container_name=container_name,
                 blob_name=blob_name,
                 block_list=block_ids,

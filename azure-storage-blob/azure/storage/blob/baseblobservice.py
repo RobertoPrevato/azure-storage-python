@@ -1880,7 +1880,7 @@ class BaseBlobService(StorageClient):
 
         # If the user explicitly sets max_connections to 1, do a single shot download
         if max_connections == 1:
-            blob = self._get_blob(container_name,
+            blob = await self._get_blob(container_name,
                                   blob_name,
                                   snapshot,
                                   start_range=start_range,
@@ -1917,7 +1917,7 @@ class BaseBlobService(StorageClient):
             # Send a context object to make sure we always retry to the initial location
             operation_context = _OperationContext(location_lock=True)
             try:
-                blob = self._get_blob(container_name,
+                blob = await self._get_blob(container_name,
                                       blob_name,
                                       snapshot,
                                       start_range=initial_request_start,
@@ -1971,7 +1971,7 @@ class BaseBlobService(StorageClient):
         # Write the content to the user stream  
         # Clear blob content since output has been written to user stream   
         if blob.content is not None:
-            stream.write(blob.content)
+            stream.write(str.encode(blob.content, "utf8"))
             blob.content = None
 
         # If the blob is small or single shot download was used, the download is 
@@ -2022,7 +2022,7 @@ class BaseBlobService(StorageClient):
 
         return blob
 
-    def get_blob_to_bytes(
+    async def get_blob_to_bytes(
             self, container_name, blob_name, snapshot=None,
             start_range=None, end_range=None, validate_content=False,
             progress_callback=None, max_connections=2, lease_id=None,
@@ -2115,7 +2115,7 @@ class BaseBlobService(StorageClient):
         _validate_not_none('blob_name', blob_name)
 
         stream = BytesIO()
-        blob = self.get_blob_to_stream(
+        blob = await self.get_blob_to_stream(
             container_name,
             blob_name,
             stream,
@@ -2135,7 +2135,7 @@ class BaseBlobService(StorageClient):
         blob.content = stream.getvalue()
         return blob
 
-    def get_blob_to_text(
+    async def get_blob_to_text(
             self, container_name, blob_name, encoding='utf-8', snapshot=None,
             start_range=None, end_range=None, validate_content=False,
             progress_callback=None, max_connections=2, lease_id=None,
@@ -2230,20 +2230,20 @@ class BaseBlobService(StorageClient):
         _validate_not_none('blob_name', blob_name)
         _validate_not_none('encoding', encoding)
 
-        blob = self.get_blob_to_bytes(container_name,
-                                      blob_name,
-                                      snapshot,
-                                      start_range,
-                                      end_range,
-                                      validate_content,
-                                      progress_callback,
-                                      max_connections,
-                                      lease_id,
-                                      if_modified_since,
-                                      if_unmodified_since,
-                                      if_match,
-                                      if_none_match,
-                                      timeout)
+        blob = await self.get_blob_to_bytes(container_name,
+                                            blob_name,
+                                            snapshot,
+                                            start_range,
+                                            end_range,
+                                            validate_content,
+                                            progress_callback,
+                                            max_connections,
+                                            lease_id,
+                                            if_modified_since,
+                                            if_unmodified_since,
+                                            if_match,
+                                            if_none_match,
+                                            timeout)
         blob.content = blob.content.decode(encoding)
         return blob
 
