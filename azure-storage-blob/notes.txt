@@ -1,2 +1,0 @@
-py -3 -m venv env
-env\Scripts\pip install -e ..\azure-storage-common
