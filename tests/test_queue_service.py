@@ -1,16 +1,13 @@
 import asyncio
 import unittest
 from azure.storage.queue import QueueService
-
+from tests import ACCOUNT_KEY, ACCOUNT_NAME
 
 import logging
 logging.basicConfig(format='%(asctime)s %(name)-20s %(levelname)-5s %(message)s', level=logging.INFO)
 
 
 TEST_QUEUE = 'foos'
-
-ACCOUNT_NAME = '<ACCOUNT_NAME>'
-ACCOUNT_KEY = '<ACCOUNT_KEY>'
 
 
 class TestContainers(unittest.TestCase):

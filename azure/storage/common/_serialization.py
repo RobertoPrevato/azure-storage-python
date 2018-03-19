@@ -105,6 +105,9 @@ def _get_data_bytes_only(param_name, param_value):
     if isinstance(param_value, bytes):
         return param_value
 
+    if isinstance(param_value, BytesIO):
+        return param_value
+
     raise TypeError(_ERROR_VALUE_SHOULD_BE_BYTES.format(param_name))
 
 

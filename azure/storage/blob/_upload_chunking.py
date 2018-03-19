@@ -321,9 +321,9 @@ class _PageBlobChunkUploader(_BlobChunkUploader):
 
 
 class _AppendBlobChunkUploader(_BlobChunkUploader):
-    def _upload_chunk(self, chunk_offset, chunk_data):
+    async def _upload_chunk(self, chunk_offset, chunk_data):
         if not hasattr(self, 'current_length'):
-            resp = self.blob_service.append_block(
+            resp = await self.blob_service.append_block(
                 self.container_name,
                 self.blob_name,
                 chunk_data,
@@ -335,7 +335,7 @@ class _AppendBlobChunkUploader(_BlobChunkUploader):
 
             self.current_length = resp.append_offset
         else:
-            resp = self.blob_service.append_block(
+            resp = await self.blob_service.append_block(
                 self.container_name,
                 self.blob_name,
                 chunk_data,

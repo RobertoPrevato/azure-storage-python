@@ -53,10 +53,7 @@ from .models import (
     ResourceProperties
 )
 
-if sys.version_info >= (3,):
-    from io import BytesIO
-else:
-    from cStringIO import StringIO as BytesIO
+from io import BytesIO
 
 
 class AppendBlobService(BaseBlobService):
@@ -124,7 +121,7 @@ class AppendBlobService(BaseBlobService):
             account_name, account_key, sas_token, is_emulated, protocol, endpoint_suffix,
             custom_domain, request_session, connection_string, socket_timeout)
 
-    def create_blob(self, container_name, blob_name, content_settings=None,
+    async def create_blob(self, container_name, blob_name, content_settings=None,
                     metadata=None, lease_id=None,
                     if_modified_since=None, if_unmodified_since=None,
                     if_match=None, if_none_match=None, timeout=None):
@@ -183,6 +180,10 @@ class AppendBlobService(BaseBlobService):
         request.path = _get_path(container_name, blob_name)
         request.query = {'timeout': _int_to_str(timeout)}
         request.headers = {
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Host': f'{self.account_name}.blob.core.windows.net',
+            'Content-Type': 'application/octet-stream',
             'x-ms-blob-type': _to_str(self.blob_type),
             'x-ms-lease-id': _to_str(lease_id),
             'If-Modified-Since': _datetime_to_utc_string(if_modified_since),
@@ -194,9 +195,9 @@ class AppendBlobService(BaseBlobService):
         if content_settings is not None:
             request.headers.update(content_settings._to_headers())
 
-        return self._perform_request(request, _parse_base_properties)
+        return await self._perform_request(request, _parse_base_properties)
 
-    def append_block(self, container_name, blob_name, block,
+    async def append_block(self, container_name, blob_name, block,
                      validate_content=False, maxsize_condition=None,
                      appendpos_condition=None,
                      lease_id=None, if_modified_since=None,
@@ -275,6 +276,10 @@ class AppendBlobService(BaseBlobService):
             'timeout': _int_to_str(timeout),
         }
         request.headers = {
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Host': f'{self.account_name}.blob.core.windows.net',
+            'Content-Type': 'application/octet-stream',
             'x-ms-blob-condition-maxsize': _to_str(maxsize_condition),
             'x-ms-blob-condition-appendpos': _to_str(appendpos_condition),
             'x-ms-lease-id': _to_str(lease_id),
@@ -289,11 +294,11 @@ class AppendBlobService(BaseBlobService):
             computed_md5 = _get_content_md5(request.body)
             request.headers['Content-MD5'] = _to_str(computed_md5)
 
-        return self._perform_request(request, _parse_append_block)
+        return await self._perform_request(request, _parse_append_block)
 
     # ----Convenience APIs----------------------------------------------
 
-    def append_blob_from_path(
+    async def append_blob_from_path(
             self, container_name, blob_name, file_path, validate_content=False,
             maxsize_condition=None, progress_callback=None, lease_id=None, timeout=None):
         '''
@@ -340,7 +345,7 @@ class AppendBlobService(BaseBlobService):
 
         count = path.getsize(file_path)
         with open(file_path, 'rb') as stream:
-            return self.append_blob_from_stream(
+            return await self.append_blob_from_stream(
                 container_name,
                 blob_name,
                 stream,
@@ -351,7 +356,7 @@ class AppendBlobService(BaseBlobService):
                 lease_id=lease_id,
                 timeout=timeout)
 
-    def append_blob_from_bytes(
+    async def append_blob_from_bytes(
             self, container_name, blob_name, blob, index=0, count=None,
             validate_content=False, maxsize_condition=None, progress_callback=None,
             lease_id=None, timeout=None):
@@ -413,7 +418,7 @@ class AppendBlobService(BaseBlobService):
         stream = BytesIO(blob)
         stream.seek(index)
 
-        return self.append_blob_from_stream(
+        return await self.append_blob_from_stream(
             container_name,
             blob_name,
             stream,
@@ -424,7 +429,7 @@ class AppendBlobService(BaseBlobService):
             progress_callback=progress_callback,
             timeout=timeout)
 
-    def append_blob_from_text(
+    async def append_blob_from_text(
             self, container_name, blob_name, text, encoding='utf-8',
             validate_content=False, maxsize_condition=None, progress_callback=None,
             lease_id=None, timeout=None):
@@ -476,7 +481,7 @@ class AppendBlobService(BaseBlobService):
             _validate_not_none('encoding', encoding)
             text = text.encode(encoding)
 
-        return self.append_blob_from_bytes(
+        return await self.append_blob_from_bytes(
             container_name,
             blob_name,
             text,
@@ -488,7 +493,7 @@ class AppendBlobService(BaseBlobService):
             progress_callback=progress_callback,
             timeout=timeout)
 
-    def append_blob_from_stream(
+    async def append_blob_from_stream(
             self, container_name, blob_name, stream, count=None,
             validate_content=False, maxsize_condition=None, progress_callback=None,
             lease_id=None, timeout=None):
@@ -541,7 +546,7 @@ class AppendBlobService(BaseBlobService):
         # is passed as a parameter to get the last_modified and etag for page and append blobs.
         # this info is not needed for block_blobs since _put_block_list is called after which gets this info
         resource_properties = ResourceProperties()
-        _upload_blob_chunks(
+        await _upload_blob_chunks(
             blob_service=self,
             container_name=container_name,
             blob_name=blob_name,
