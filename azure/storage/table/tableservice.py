@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --------------------------------------------------------------------------
-from contextlib import contextmanager
 
 from azure.common import (
     AzureHttpError,
@@ -825,7 +824,9 @@ class TableService(StorageClient):
         request.method = 'POST'
         request.host_locations = self._get_host_locations()
         request.path = '/' + '$batch'
-        request.query = {'timeout': _int_to_str(timeout)}
+
+        if timeout is not None:
+            request.query = {'timeout': _int_to_str(timeout)}
 
         # Update the batch operation requests with table and client specific info
         for row_key, batch_request in batch._requests:
@@ -844,19 +845,13 @@ class TableService(StorageClient):
         # Perform the batch request and return the response
         return await self._perform_request(request, _parse_batch_response)
 
-    @contextmanager
-    def batch(self, table_name, timeout=None):
+    def get_batch(self):
         '''
-        Creates a batch object which can be used as a context manager. Commits the batch on exit.
-
-        :param str table_name:
-            The name of the table to commit the batch to.
-        :param int timeout:
-            The server timeout, expressed in seconds.
+        Creates a batch object and returns it.
         '''
-        batch = TableBatch(self.require_encryption, self.key_encryption_key, self.encryption_resolver_function)
-        yield batch
-        self.commit_batch(table_name, batch, timeout=timeout)
+        return TableBatch(self.require_encryption,
+                          self.key_encryption_key,
+                          self.encryption_resolver_function)
 
     async def get_entity(self, table_name, partition_key, row_key, select=None,
                    accept=TablePayloadFormat.JSON_MINIMAL_METADATA,
@@ -1103,4 +1098,26 @@ class TableService(StorageClient):
 
     async def _perform_request(self, request, parser=None, parser_args=None, operation_context=None):
         _update_storage_table_header(request)
-        return await super(TableService, self)._perform_request(request, parser, parser_args, operation_context)
+        return await super()._perform_request(request, parser, parser_args, operation_context)
+
+
+class TableBatchContext():
+    def __init__(self, client : TableService,
+                 table_name : str,
+                 timeout=None):
+        self.client = client
+        self.batch = client.get_batch()
+        self.table_name = table_name
+        self.timeout = timeout
+
+    async def __aenter__(self):
+        return self.batch
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.client.commit_batch(self.table_name,
+                                       self.batch,
+                                       self.timeout)
+        self.client = None
+        self.batch = None
+        self.table_name = None
+        self.timeout = None

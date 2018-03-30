@@ -317,6 +317,7 @@ class StorageClient(object):
                     retry_context.exception = ex
                     raise ex
                 except Exception as ex:
+                    logger.error(f'_perform_request error: {ex}')
                     retry_context.exception = ex
                     if sys.version_info >= (3,):
                         # Automatic chaining in Python 3 means we keep the trace

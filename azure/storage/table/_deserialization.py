@@ -296,13 +296,13 @@ def _parse_batch_response(response):
     if response is None or response.body is None:
         return None
 
-    parts = response.body.split(b'--changesetresponse_')
+    parts = response.body.split('--changesetresponse_')
 
     responses = []
     for part in parts:
-        httpLocation = part.find(b'HTTP/')
-        if httpLocation > 0:
-            response_part = _parse_batch_response_part(part[httpLocation:])
+        http_location = part.find('HTTP/')
+        if http_location > 0:
+            response_part = _parse_batch_response_part(part[http_location:])
             if response_part.status >= 300:
                 _parse_batch_error(response_part)
             responses.append(_extract_etag(response_part))
@@ -314,26 +314,26 @@ def _parse_batch_response_part(part):
     lines = part.splitlines()
 
     # First line is the HTTP status/reason
-    status, _, reason = lines[0].partition(b' ')[2].partition(b' ')
+    status, _, reason = lines[0].partition(' ')[2].partition(' ')
 
     # Followed by headers and body
     headers = {}
-    body = b''
-    isBody = False
+    body = ''
+    is_body = False
     for line in lines[1:]:
-        if line == b'' and not isBody:
-            isBody = True
-        elif isBody:
+        if line == '' and not is_body:
+            is_body = True
+        elif is_body:
             body += line
         else:
-            headerName, _, headerVal = line.partition(b': ')
-            headers[headerName.lower().decode("utf-8")] = headerVal.decode("utf-8")
+            headerName, _, headerVal = line.partition(': ')
+            headers[headerName.lower()] = headerVal
 
     return HTTPResponse(int(status), reason.strip(), headers, body)
 
 
 def _parse_batch_error(part):
-    doc = loads(part.body.decode('utf-8'))
+    doc = loads(part.body)
 
     code = ''
     message = ''

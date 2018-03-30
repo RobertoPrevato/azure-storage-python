@@ -23,4 +23,4 @@ from azure.storage.table.models import (
     AzureBatchValidationError,
 )
 from azure.storage.table.tablebatch import TableBatch
-from azure.storage.table.tableservice import TableService
+from azure.storage.table.tableservice import TableService, TableBatchContext
