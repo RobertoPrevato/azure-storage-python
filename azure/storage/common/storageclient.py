@@ -18,7 +18,6 @@ from abc import ABCMeta
 import logging
 
 logger = logging.getLogger(__name__)
-from time import sleep
 
 import asyncio
 import aiohttp
@@ -374,7 +373,7 @@ class StorageClient(object):
                         retry_interval)
 
                     # Sleep for the desired retry interval
-                    sleep(retry_interval)
+                    await asyncio.sleep(retry_interval)
                 else:
                     logger.error("%s Retry policy did not allow for a retry: "
                                  "%s, HTTP status code=%s, Exception=%s.",

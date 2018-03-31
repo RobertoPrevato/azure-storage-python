@@ -15,6 +15,7 @@
 
 from azure.common import (
     AzureHttpError,
+    AzureMissingResourceHttpError
 )
 
 from azure.storage.common._auth import (
@@ -853,9 +854,15 @@ class TableService(StorageClient):
                           self.key_encryption_key,
                           self.encryption_resolver_function)
 
-    async def get_entity(self, table_name, partition_key, row_key, select=None,
-                   accept=TablePayloadFormat.JSON_MINIMAL_METADATA,
-                   property_resolver=None, timeout=None):
+    async def get_entity(self,
+                         table_name,
+                         partition_key,
+                         row_key,
+                         select=None,
+                         throw_if_not_found=False,
+                         accept=TablePayloadFormat.JSON_MINIMAL_METADATA,
+                         property_resolver=None,
+                         timeout=None):
         '''
         Get an entity from the specified table. Throws if the entity does not exist.
 
@@ -888,9 +895,17 @@ class TableService(StorageClient):
         request.path = _get_entity_path(table_name, partition_key, row_key)
         request.query['timeout'] = _int_to_str(timeout)
 
-        return await self._perform_request(request, _convert_json_response_to_entity,
-                                     [property_resolver, self.require_encryption,
-                                      self.key_encryption_key, self.key_resolver_function])
+        try:
+            data = await self._perform_request(request, _convert_json_response_to_entity,
+                                         [property_resolver, self.require_encryption,
+                                          self.key_encryption_key, self.key_resolver_function])
+        except AzureMissingResourceHttpError:
+            if throw_if_not_found:
+                raise
+            else:
+                return None
+        else:
+            return data
 
     async def insert_entity(self, table_name, entity, timeout=None):
         '''
@@ -1102,6 +1117,9 @@ class TableService(StorageClient):
 
 
 class TableBatchContext():
+
+    __slots__ = 'client', 'batch', 'table_name', 'timeout'
+
     def __init__(self, client : TableService,
                  table_name : str,
                  timeout=None):
