@@ -12,16 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --------------------------------------------------------------------------
-import sys
-
-if sys.version_info < (3,):
-    from collections import Iterable
-
-    _unicode_type = unicode
-else:
-    from collections.abc import Iterable
-
-    _unicode_type = str
+from collections.abc import AsyncIterable
+_unicode_type = str
 
 from ._error import (
     _validate_not_none
@@ -34,17 +26,17 @@ class _HeaderDict(dict):
 
 
 class _list(list):
-    '''Used so that additional properties can be set on the return list'''
+    """Used so that additional properties can be set on the return list"""
     pass
 
 
 class _dict(dict):
-    '''Used so that additional properties can be set on the return dictionary'''
+    """Used so that additional properties can be set on the return dictionary"""
     pass
 
 
 class _OperationContext(object):
-    '''
+    """
     Contains information that lasts the lifetime of an operation. This operation 
     may span multiple calls to the Azure service.
 
@@ -52,15 +44,15 @@ class _OperationContext(object):
         Whether the location should be locked for this operation.
     :ivar str location: 
         The location to lock to.
-    '''
+    """
 
     def __init__(self, location_lock=False):
         self.location_lock = location_lock
         self.host_location = None
 
 
-class ListGenerator(Iterable):
-    '''
+class ListGenerator(AsyncIterable):
+    """
     A generator object used to list storage resources. The generator will lazily 
     follow the continuation tokens returned by the service and stop when all 
     resources have been returned or max_results is reached.
@@ -69,7 +61,7 @@ class ListGenerator(Iterable):
     resources, the generator will have a populated next_marker field once it 
     finishes. This marker can be used to create a new generator if more 
     results are desired.
-    '''
+    """
 
     def __init__(self, resources, list_method, list_args, list_kwargs):
         self.items = resources
@@ -79,7 +71,7 @@ class ListGenerator(Iterable):
         self._list_args = list_args
         self._list_kwargs = list_kwargs
 
-    def __iter__(self):
+    async def __aiter__(self):
         # return results
         for i in self.items:
             yield i
@@ -105,7 +97,7 @@ class ListGenerator(Iterable):
                     self._list_kwargs['max_results'] = max_results
 
             # get the next segment
-            resources = self._list_method(*self._list_args, **self._list_kwargs)
+            resources = await self._list_method(*self._list_args, **self._list_kwargs)
             self.items = resources
             self.next_marker = resources.next_marker
 
@@ -115,7 +107,7 @@ class ListGenerator(Iterable):
 
 
 class RetryContext(object):
-    '''
+    """
     Contains the request and response information that can be used to determine 
     whether and how to retry. This context is stored across retries and may be 
     used to store other information relevant to the retry strategy.
@@ -129,7 +121,7 @@ class RetryContext(object):
     :ivar Exception exception:
         The exception that just occurred. The type could either be AzureException (for HTTP errors),
         or other Exception types from lower layers, which are kept unwrapped for easier processing.
-    '''
+    """
 
     def __init__(self):
         self.request = None
@@ -139,21 +131,21 @@ class RetryContext(object):
 
 
 class LocationMode(object):
-    '''
+    """
     Specifies the location the request should be sent to. This mode only applies 
     for RA-GRS accounts which allow secondary read access. All other account types 
     must use PRIMARY.
-    '''
+    """
 
     PRIMARY = 'primary'
-    ''' Requests should be sent to the primary location. '''
+    """ Requests should be sent to the primary location. """
 
     SECONDARY = 'secondary'
-    ''' Requests should be sent to the secondary location, if possible. '''
+    """ Requests should be sent to the secondary location, if possible. """
 
 
 class RetentionPolicy(object):
-    '''
+    """
     By default, Storage Analytics will not delete any logging or metrics data. Blobs
     will continue to be written until the shared 20TB limit is
     reached. Once the 20TB limit is reached, Storage Analytics will stop writing 
@@ -164,10 +156,10 @@ class RetentionPolicy(object):
     requests or by setting a data retention policy. Manual requests to delete Storage 
     Analytics data are billable, but delete requests resulting from a retention policy 
     are not billable.
-    '''
+    """
 
     def __init__(self, enabled=False, days=None):
-        '''
+        """
         :param bool enabled: 
             Indicates whether a retention policy is enabled for the 
             storage service. If disabled, logging and metrics data will be retained 
@@ -177,7 +169,7 @@ class RetentionPolicy(object):
             days that metrics or logging data should be retained. All data older 
             than this value will be deleted. The minimum value you can specify is 1; 
             the largest value is 365 (one year).
-        '''
+        """
         _validate_not_none("enabled", enabled)
         if enabled:
             _validate_not_none("days", days)
@@ -187,7 +179,7 @@ class RetentionPolicy(object):
 
 
 class Logging(object):
-    '''
+    """
     Storage Analytics logs detailed information about successful and failed requests 
     to a storage service. This information can be used to monitor individual requests 
     and to diagnose issues with a storage service. Requests are logged on a best-effort 
@@ -200,11 +192,11 @@ class Logging(object):
     its contents can be deleted.
 
     For more information, see  https://msdn.microsoft.com/en-us/library/azure/hh343262.aspx
-    '''
+    """
 
     def __init__(self, delete=False, read=False, write=False,
                  retention_policy=None):
-        '''
+        """
         :param bool delete: 
             Indicates whether all delete requests should be logged.
         :param bool read: 
@@ -213,7 +205,7 @@ class Logging(object):
             Indicates whether all write requests should be logged.
         :param RetentionPolicy retention_policy: 
             The retention policy for the metrics.
-        '''
+        """
         _validate_not_none("read", read)
         _validate_not_none("write", write)
         _validate_not_none("delete", delete)
@@ -226,7 +218,7 @@ class Logging(object):
 
 
 class Metrics(object):
-    '''
+    """
     Metrics include aggregated transaction statistics and capacity data about requests 
     to a storage service. Transactions are reported at both the API operation level 
     as well as at the storage service level, and capacity is reported at the storage 
@@ -235,11 +227,11 @@ class Metrics(object):
     performance of applications that use a service.
 
     For more information, see https://msdn.microsoft.com/en-us/library/azure/hh343258.aspx
-    '''
+    """
 
     def __init__(self, enabled=False, include_apis=None,
                  retention_policy=None):
-        '''
+        """
         :param bool enabled: 
             Indicates whether metrics are enabled for 
             the service.
@@ -248,7 +240,7 @@ class Metrics(object):
             should generate summary statistics for called API operations.
         :param RetentionPolicy retention_policy: 
             The retention policy for the metrics.
-        '''
+        """
         _validate_not_none("enabled", enabled)
         if enabled:
             _validate_not_none("include_apis", include_apis)
@@ -260,7 +252,7 @@ class Metrics(object):
 
 
 class CorsRule(object):
-    '''
+    """
     CORS is an HTTP feature that enables a web application running under one domain 
     to access resources in another domain. Web browsers implement a security 
     restriction known as same-origin policy that prevents a web page from calling 
@@ -268,11 +260,11 @@ class CorsRule(object):
     (the origin domain) to call APIs in another domain. 
 
     For more information, see https://msdn.microsoft.com/en-us/library/azure/dn535601.aspx
-    '''
+    """
 
     def __init__(self, allowed_origins, allowed_methods, max_age_in_seconds=0,
                  exposed_headers=None, allowed_headers=None):
-        '''
+        """
         :param allowed_origins: 
             A list of origin domains that will be allowed via CORS, or "*" to allow 
             all domains. The list of must contain at least one entry. Limited to 64 
@@ -296,7 +288,7 @@ class CorsRule(object):
             the cross-origin request. Limited to 64 defined headers and 2 prefixed 
             headers. Each header can be up to 256 characters.
         :type allowed_headers: list(str)
-        '''
+        """
         _validate_not_none("allowed_origins", allowed_origins)
         _validate_not_none("allowed_methods", allowed_methods)
         _validate_not_none("max_age_in_seconds", max_age_in_seconds)
@@ -309,7 +301,7 @@ class CorsRule(object):
 
 
 class ServiceProperties(object):
-    ''' 
+    """ 
     Returned by get_*_service_properties functions. Contains the properties of a 
     storage service, including Analytics and CORS rules.
 
@@ -327,25 +319,25 @@ class ServiceProperties(object):
     http://azure.microsoft.com/documentation/articles/storage-monitoring-diagnosing-troubleshooting/
 
     For more information on CORS, see https://msdn.microsoft.com/en-us/library/azure/dn535601.aspx
-    '''
+    """
 
     pass
 
 
 class ServiceStats(object):
-    ''' 
+    """ 
     Returned by get_*_service_stats functions. Contains statistics related to 
     replication for the given service. It is only available when read-access 
     geo-redundant replication is enabled for the storage account.
 
     :ivar GeoReplication geo_replication:
         An object containing statistics related to replication for the given service.
-    '''
+    """
     pass
 
 
 class GeoReplication(object):
-    ''' 
+    """ 
     Contains statistics related to replication for the given service.
 
     :ivar str status:
@@ -364,12 +356,12 @@ class GeoReplication(object):
         happen if the replication status is bootstrap or unavailable. Although 
         geo-replication is continuously enabled, the LastSyncTime result may 
         reflect a cached value from the service that is refreshed every few minutes.
-    '''
+    """
     pass
 
 
 class AccessPolicy(object):
-    '''
+    """
     Access Policy class used by the set and get acl methods in each service.
 
     A stored access policy can specify the start time, expiry time, and 
@@ -388,10 +380,10 @@ class AccessPolicy(object):
     fields are missing, the request will fail. Likewise, if a field is specified 
     both in the Shared Access Signature URL and in the stored access policy, the 
     request will fail with status code 400 (Bad Request).
-    '''
+    """
 
     def __init__(self, permission=None, expiry=None, start=None):
-        '''
+        """
         :param str permission:
             The permissions associated with the shared access signature. The 
             user is restricted to operations allowed by the permissions. 
@@ -413,27 +405,27 @@ class AccessPolicy(object):
             to UTC. If a date is passed in without timezone info, it is assumed to 
             be UTC.
         :type start: datetime or str
-        '''
+        """
         self.start = start
         self.expiry = expiry
         self.permission = permission
 
 
 class Protocol(object):
-    '''
+    """
     Specifies the protocol permitted for a SAS token. Note that HTTP only is 
     not allowed.
-    '''
+    """
 
     HTTPS = 'https'
-    ''' Allow HTTPS requests only. '''
+    """ Allow HTTPS requests only. """
 
     HTTPS_HTTP = 'https,http'
-    ''' Allow HTTP and HTTPS requests. '''
+    """ Allow HTTP and HTTPS requests. """
 
 
 class ResourceTypes(object):
-    '''
+    """
     Specifies the resource types that are accessible with the account SAS.
 
     :ivar ResourceTypes ResourceTypes.CONTAINER:
@@ -446,10 +438,10 @@ class ResourceTypes(object):
     :ivar ResourceTypes ResourceTypes.SERVICE:
         Access to service-level APIs (e.g., Get/Set Service Properties, 
         Get Service Stats, List Containers/Queues/Shares)
-    '''
+    """
 
     def __init__(self, service=False, container=False, object=False, _str=None):
-        '''
+        """
         :param bool service:
             Access to service-level APIs (e.g., Get/Set Service Properties, 
             Get Service Stats, List Containers/Queues/Shares)
@@ -462,7 +454,7 @@ class ResourceTypes(object):
             files(e.g. Put Blob, Query Entity, Get Messages, Create File, etc.) 
         :param str _str: 
             A string representing the resource types.
-        '''
+        """
         if not _str:
             _str = ''
         self.service = service or ('s' in _str)
@@ -487,16 +479,16 @@ ResourceTypes.OBJECT = ResourceTypes(object=True)
 
 
 class Services(object):
-    '''
+    """
     Specifies the services accessible with the account SAS.
 
     :ivar Services Services.BLOB: The blob service.
     :ivar Services Services.FILE: The file service
     :ivar Services Services.QUEUE: The queue service.
-    '''
+    """
 
     def __init__(self, blob=False, queue=False, file=False, _str=None):
-        '''
+        """
         :param bool blob:
             Access to any blob service, for example, the `.BlockBlobService`
         :param bool queue:
@@ -505,7 +497,7 @@ class Services(object):
             Access to the `.FileService`
         :param str _str: 
             A string representing the services.
-        '''
+        """
         if not _str:
             _str = ''
         self.blob = blob or ('b' in _str)
@@ -530,7 +522,7 @@ Services.FILE = Services(file=True)
 
 
 class AccountPermissions(object):
-    '''
+    """
     :class:`~ResourceTypes` class to be used with generate_shared_access_signature 
     method and for the AccessPolicies used with set_*_acl. There are two types of 
     SAS which may be used to grant resource access. One is to grant access to a 
@@ -557,11 +549,11 @@ class AccountPermissions(object):
     :ivar AccountPermissions AccountPermissions.WRITE:
         Valid for all signed resources types (Service, Container, and Object). 
         Permits write permissions to the specified resource type. 
-    '''
+    """
 
     def __init__(self, read=False, write=False, delete=False, list=False,
                  add=False, create=False, update=False, process=False, _str=None):
-        '''
+        """
         :param bool read:
             Valid for all signed resources types (Service, Container, and Object). 
             Permits read permissions to the specified resource type.
@@ -584,7 +576,7 @@ class AccountPermissions(object):
             Valid for the following Object resource type only: queue messages.
         :param str _str: 
             A string representing the permissions.
-        '''
+        """
         if not _str:
             _str = ''
         self.read = read or ('r' in _str)
